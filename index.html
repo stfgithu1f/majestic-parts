@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Majestic Parts Finder</title>
+<meta name="description" content="Independent guide for owners of Elddis-built Marquis Majestic motorhomes (2011–2024 seasons): the original fittings for your model and season, each with its source, and where to get a replacement.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231f5f8b'/%3E%3Cpath d='M14 40h36v6H14zM18 22h22l8 10v6H18z' fill='%23fff'/%3E%3Ccircle cx='24' cy='47' r='5' fill='%23fff'/%3E%3Ccircle cx='42' cy='47' r='5' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css?v=4d0b6fcbac">
+</head>
+<body>
+<a class="skip" href="#results">Skip to results</a>
+<header class="site-head">
+  <div class="wrap">
+    <p class="eyebrow">Independent owners' guide · not affiliated with Marquis, Elddis or Erwin Hymer Group</p>
+    <h1>Majestic Parts Finder</h1>
+    <p class="lede">For Elddis-built Marquis Majestic motorhomes, 2011–2024 seasons. Enter your model number and season to see the fittings it left the factory with, where each fact comes from, and where to get a replacement.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <form id="finder" class="finder" autocomplete="off">
+    <div class="field">
+      <label for="model">Model number</label>
+      <input id="model" name="model" inputmode="numeric" pattern="[0-9]*" maxlength="3" placeholder="e.g. 155" list="model-list" aria-describedby="model-help">
+      <datalist id="model-list"></datalist>
+      <p id="model-help" class="help">On the badge at the back or side, or in your V5C and sales papers.</p>
+    </div>
+    <div class="field">
+      <label for="season">Season (model year)</label>
+      <select id="season" name="season" aria-describedby="season-help"></select>
+      <p id="season-help" class="help">Seasons start in the autumn before: a "2020" Majestic was priced from 1 October 2019.</p>
+    </div>
+    <button type="submit" class="go">Show fittings</button>
+  </form>
+
+  <nav class="quick" aria-label="Pick a model">
+    <div id="quick-models"></div>
+  </nav>
+
+  <section id="results" aria-live="polite"></section>
+
+  <aside class="notice" role="note">
+    <strong>Not an official site.</strong> This guide is independent and is not affiliated with, endorsed by or connected to Marquis Leisure, Elddis or Erwin Hymer Group. Fittings come from the published handbooks, brochures and press tests for each season, and your van may differ (options, dealer fits, earlier repairs). Check the label on the part itself and quote your VIN before you order. No link on this site pays us anything.
+  </aside>
+  <section class="about" id="about">
+    <h2>Getting parts for a Majestic</h2>
+    <div class="cards" id="about-cards"></div>
+  </section>
+
+  <section class="about" id="method">
+    <h2>How this list was made</h2>
+    <div id="method-body"></div>
+  </section>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p>Independent guide. Not affiliated with Marquis Leisure, Elddis or Erwin Hymer Group. Product names belong to their owners and are used only to identify parts. <span id="checked-line"></span> Spotted a mistake? <a href="https://github.com/stfgithu1f/majestic-parts/issues" target="_blank" rel="noopener">Report a correction</a>.</p>
+  </div>
+</footer>
+
+<script src="data.js?v=4d0b6fcbac"></script>
+<script src="app.js?v=4d0b6fcbac"></script>
+</body>
+</html>
