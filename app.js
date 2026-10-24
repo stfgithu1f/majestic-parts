@@ -3,6 +3,7 @@
   var D = window.MAJESTIC;
   var $ = function (id) { return document.getElementById(id); };
   var modelInput = $("model"), seasonSel = $("season"), results = $("results");
+  var curPart = null; // the part chosen under "What needs replacing?", or null
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -90,7 +91,7 @@
 
   function go() {
     var m = modelInput.value.trim(), s = seasonSel.value;
-    if (m && s) location.hash = m + "/" + s;
+    if (m && s) location.hash = m + "/" + s + (curPart ? "/" + curPart : "");
     else if (m) location.hash = m;
     else render(null, null);
   }
@@ -98,8 +99,12 @@
 
   function fromHash() {
     var h = decodeURIComponent(location.hash.replace(/^#/, ""));
-    var mm = h.match(/^(\d{3})(?:[\/-](\d{4}))?$/);
-    if (!mm) { if (!h) render(null, null); return; }
+    var pm = h.match(/^part\/([a-z_]+)$/);
+    if (pm && D.catInfo[pm[1]]) { curPart = pm[1]; showChips(); renderPart(pm[1]); return; }
+    var mm = h.match(/^(\d{3})(?:[\/-](\d{4}))?(?:\/([a-z_]+))?$/);
+    if (!mm) { if (!h) { curPart = null; showChips(); render(null, null); } return; }
+    curPart = mm[2] && mm[3] && D.catInfo[mm[3]] ? mm[3] : null;
+    showChips();
     modelInput.value = mm[1];
     fillSeasons(mm[1], mm[2]);
     if (mm[2]) seasonSel.value = byModel[mm[1]] && byModel[mm[1]][mm[2]] ? mm[2] : "";
@@ -210,7 +215,8 @@
     if (c.genuine === "peugeot") {
       out.push({ k: "Genuine", h: "Any Peugeot dealer, quoting the VIN. " + (c.genuineNote || "") });
     } else if (c.genuine !== "none") {
-      out.push({ k: "Genuine", h: "Any Elddis approved retailer or Marquis branch, quoting your 17-digit VIN and the Elddis twin, <strong>" + esc(v.tw.name) + " (" + v.s + ")</strong>." });
+      var twin = v ? " and the Elddis twin, <strong>" + esc(v.tw.name) + " (" + v.s + ")</strong>" : " and your van's Elddis twin (shown once you choose your model and season above)";
+      out.push({ k: "Genuine", h: "Any Elddis approved retailer or Marquis branch, quoting your 17-digit VIN" + twin + "." });
     }
     var mk = makers.map(norm);
     var routes = D.routes.filter(function (r) { return r.c === cat; });
@@ -252,9 +258,52 @@
     return { list: out, general: general && routes.length > 0 };
   }
 
+  function routesHtml(rt) {
+    var body = "<h4>Where to replace</h4>";
+    if (rt.general) body += '<p class="gapnote">The maker is not documented, so these are suppliers for this type of part.</p>';
+    body += '<ul class="routes">';
+    rt.list.forEach(function (r) {
+      body += '<li class="route"><span class="rk">' + esc(r.k) + "</span>" + r.h + (r.n ? '<span class="rn">' + esc(r.n) + "</span>" : "") + "</li>";
+    });
+    return body + "</ul>";
+  }
+  function nearSlot(cat, makers) {
+    return '<div class="near" data-cat="' + esc(cat) + '" data-mk="' + esc(makers.join("|")) + '"></div>';
+  }
+
+  var idx = 0;
+  function catHtml(cat, v, facts, gaps, focus) {
+    var cf = facts.filter(function (f) { return f.c === cat; });
+    var cg = gaps.filter(function (x) { return x.c === cat; });
+    var label = D.catInfo[cat].label;
+    var merged = mergeFacts(cf);
+    var named = merged.filter(function (e) { return e.named; }), desc = merged.filter(function (e) { return !e.named; });
+    var makers = [], products = [];
+    named.forEach(function (e) {
+      if (e.mk && makers.indexOf(e.mk) < 0) makers.push(e.mk);
+      [e.pr, e.pn].forEach(function (p) { if (p && products.indexOf(p) < 0) products.push(p); });
+    });
+    var summary = named.length ? summaryOf(named)
+      : desc.length ? "Described, but no maker or model named" : "Not mentioned in any source found for this season";
+    var body = "<h4>Maker and model</h4>";
+    if (named.length) named.forEach(function (e) { body += itemHtml(e, idx++); });
+    else body += '<p class="gapnote">No brochure, price list, handbook or test we found names the maker or model for this season. Check the label on the part itself.</p>';
+    if (desc.length) {
+      body += "<h4>Also described (no maker named)</h4>";
+      desc.forEach(function (e) { body += itemHtml(e, idx++); });
+    }
+    cg.forEach(function (x) { if (merged.length) body += '<p class="gapnote">' + esc(x.n) + "</p>"; });
+    var onlyElddis = named.length && named.every(function (e) { return e.rank >= 1; });
+    if (onlyElddis) body += '<p class="gapnote">Only the Elddis range handbook names this part. Marquis upgraded some items on the Majestic, so check the label on yours.</p>';
+    body += nearSlot(cat, makers);
+    body += routesHtml(routesFor(cat, makers, products, v));
+    return '<details class="cat' + (focus ? " focus" : "") + '" id="cat-' + cat + '"' + (focus ? " open" : "") + '><summary><span class="t">' + esc(label) +
+      '</span><span class="chev" aria-hidden="true">›</span><span class="s">' + esc(summary) + "</span></summary><div class=\"cat-body\">" + body + "</div></details>";
+  }
+
   function render(m, s) {
     var vv = m && s && byModel[m] && byModel[m][s];
-    document.querySelectorAll(".chip").forEach(function (b) { b.setAttribute("aria-pressed", String(!!vv && b.dataset.model === m && b.dataset.fam === vv.f)); });
+    document.querySelectorAll(".chip[data-model]").forEach(function (b) { b.setAttribute("aria-pressed", String(!!vv && b.dataset.model === m && b.dataset.fam === vv.f)); });
     if (!m) { results.innerHTML = ""; return; }
     if (!byModel[m]) {
       results.innerHTML = '<p class="empty">No Majestic motorhome numbered <strong>' + esc(m) + "</strong> appears in any brochure, price list or handbook we found. Numbers found: " +
@@ -295,49 +344,78 @@
     h += '<div class="legend"><span><span class="badge maj">Majestic</span> Marquis brochure, price list or a test of a Majestic</span>' +
       '<span><span class="badge eld">Elddis</span> Elddis handbook for the whole ' + esc(fam.range) + ' range that season; Marquis may have changed it</span>' +
       '<span><span class="badge own">Owner</span> owner report, not verified</span></div>';
-    h += '<div class="toolbar"><button type="button" id="open-all">Open all</button><button type="button" id="close-all">Close all</button><button type="button" id="print">Print / save as PDF</button></div>';
 
-    var idx = 0;
+    idx = 0;
+    if (curPart) {
+      h += '<section class="group" id="focus"><div class="focus-head"><h3>' + esc(D.catInfo[curPart].label) + " in this van</h3>" +
+        '<a class="linkbtn" href="#' + esc(v.m + "/" + v.s) + '">Show all fittings</a></div>' + catHtml(curPart, v, facts, gaps, true) + "</section>";
+    }
+    h += '<div class="toolbar"><button type="button" id="open-all">Open all</button><button type="button" id="close-all">Close all</button><button type="button" id="print">Print / save as PDF</button></div>';
     D.groups.forEach(function (g) {
       var gh = "";
-      g.cats.forEach(function (cat) {
-        var cf = facts.filter(function (f) { return f.c === cat; });
-        var cg = gaps.filter(function (x) { return x.c === cat; });
-        var label = D.catInfo[cat].label;
-        var merged = mergeFacts(cf);
-        var named = merged.filter(function (e) { return e.named; }), desc = merged.filter(function (e) { return !e.named; });
-        var makers = [], products = [];
-        named.forEach(function (e) {
-          if (e.mk && makers.indexOf(e.mk) < 0) makers.push(e.mk);
-          [e.pr, e.pn].forEach(function (p) { if (p && products.indexOf(p) < 0) products.push(p); });
-        });
-        var summary = named.length ? summaryOf(named)
-          : desc.length ? "Described, but no maker or model named" : "Not mentioned in any source found for this season";
-        var body = "<h4>Maker and model</h4>";
-        if (named.length) named.forEach(function (e) { body += itemHtml(e, idx++); });
-        else body += '<p class="gapnote">No brochure, price list, handbook or test we found names the maker or model for this season. Check the label on the part itself.</p>';
-        if (desc.length) {
-          body += "<h4>Also described (no maker named)</h4>";
-          desc.forEach(function (e) { body += itemHtml(e, idx++); });
-        }
-        cg.forEach(function (x) { if (merged.length) body += '<p class="gapnote">' + esc(x.n) + "</p>"; });
-        var onlyElddis = named.length && named.every(function (e) { return e.rank >= 1; });
-        if (onlyElddis) body += '<p class="gapnote">Only the Elddis range handbook names this part. Marquis upgraded some items on the Majestic, so check the label on yours.</p>';
-        var rt = routesFor(cat, makers, products, v);
-        body += "<h4>Where to replace</h4>";
-        if (rt.general) body += '<p class="gapnote">The maker is not documented, so these are suppliers for this type of part.</p>';
-        body += '<ul class="routes">';
-        rt.list.forEach(function (r) {
-          body += '<li class="route"><span class="rk">' + esc(r.k) + "</span>" + r.h + (r.n ? '<span class="rn">' + esc(r.n) + "</span>" : "") + "</li>";
-        });
-        body += "</ul>";
-        gh += '<details class="cat" id="cat-' + cat + '"><summary><span class="t">' + esc(label) + '</span><span class="chev" aria-hidden="true">›</span><span class="s">' + esc(summary) + "</span></summary><div class=\"cat-body\">" + body + "</div></details>";
-      });
+      g.cats.forEach(function (cat) { if (cat !== curPart) gh += catHtml(cat, v, facts, gaps, false); });
       if (gh) h += '<section class="group"><h3>' + esc(g.label) + "</h3>" + gh + "</section>";
     });
     results.innerHTML = h;
     wire();
-    if (results.getBoundingClientRect().top > window.innerHeight * 0.6) results.scrollIntoView({ behavior: "smooth", block: "start" });
+    fillNear();
+    var target = curPart ? $("focus") : results;
+    if (target.getBoundingClientRect().top > window.innerHeight * 0.6 || curPart) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // ---- one part across every Majestic (no van chosen yet) ----
+  var famSeasons = {};
+  D.vans.forEach(function (v) { (famSeasons[v.f] = famSeasons[v.f] || {})[v.s] = 1; });
+  function ranges(list) {
+    list = list.slice().sort(function (a, b) { return a - b; });
+    var out = [], a = null, b = null;
+    list.forEach(function (y) {
+      if (a === null) { a = b = y; return; }
+      if (y === b + 1) { b = y; return; }
+      out.push(a === b ? String(a) : a + "–" + b); a = b = y;
+    });
+    if (a !== null) out.push(a === b ? String(a) : a + "–" + b);
+    return out.join(", ");
+  }
+  function makersFitted(cat) {
+    var by = {}, order = [];
+    D.facts.forEach(function (f) {
+      if (f.c !== cat || !f.nm || !f.mk) return;
+      var k = norm(f.mk);
+      if (!by[k]) { by[k] = { mk: f.mk, f: {} }; order.push(k); }
+      (f.f === "all" ? D.familyOrder : [f.f]).forEach(function (fk) {
+        f.s.forEach(function (y) {
+          if (famSeasons[fk] && famSeasons[fk][y]) (by[k].f[fk] = by[k].f[fk] || {})[y] = 1;
+        });
+      });
+    });
+    return order.map(function (k) { return by[k]; }).filter(function (x) { return Object.keys(x.f).length; });
+  }
+  function renderPart(cat) {
+    document.querySelectorAll(".chip[data-model]").forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
+    var label = D.catInfo[cat].label, fm = makersFitted(cat);
+    var h = '<div class="result-head" id="focus"><h2>' + esc(label) + "</h2>";
+    h += '<p class="sub">Every Majestic, 2011–2024 seasons. Choose your model and season above to see the one fitted to your van.</p>';
+    if (fm.length) {
+      h += '<div class="k-line">Makers named in the sources</div><ul class="docs">';
+      fm.forEach(function (x) {
+        h += "<li><strong>" + esc(x.mk) + "</strong>: " + D.familyOrder.filter(function (fk) { return x.f[fk]; }).map(function (fk) {
+          return esc(D.families[fk].label) + " " + ranges(Object.keys(x.f[fk]).map(Number));
+        }).join("; ") + "</li>";
+      });
+      h += '</ul><p class="help">From Majestic brochures, price lists and tests, and Elddis handbooks. A handbook covers a whole Elddis range, so some are “may be fitted”.</p>';
+    } else {
+      h += '<p class="gapnote">No source we found names the maker of this part on a Majestic. Check the label on the part itself.</p>';
+    }
+    h += "</div>";
+    var makers = fm.map(function (x) { return x.mk; });
+    var body = nearSlot(cat, makers) + routesHtml(routesFor(cat, makers, [], null));
+    h += '<section class="group"><details class="cat focus" open id="cat-' + cat + '"><summary><span class="t">Where to get ' + esc(label.toLowerCase()) +
+      '</span><span class="chev" aria-hidden="true">›</span><span class="s">' + esc(makers.length ? makers.join(", ") : "Maker not documented") + "</span></summary><div class=\"cat-body\">" + body + "</div></details></section>";
+    results.innerHTML = h;
+    wire();
+    fillNear();
+    $("focus").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function wire() {
@@ -356,10 +434,246 @@
       });
     });
     var all = function (open) { results.querySelectorAll("details.cat").forEach(function (d) { d.open = open; }); };
+    if (!$("open-all")) return;
     $("open-all").addEventListener("click", function () { all(true); });
     $("close-all").addEventListener("click", function () { all(false); });
     $("print").addEventListener("click", function () { all(true); window.print(); });
   }
+
+  // ---- near you ----
+  var PL = window.MAJESTIC_PLACES || { places: [], src: {} };
+  var VEHICLE = { base_vehicle: 1, engine: 1, tyres: 1 };
+  var ROLE = { mq: "Marquis branch", ed: "Elddis dealer", es: "Elddis service centre", wf: "Approved workshop", wb: "Approved workshop, also mobile", wm: "Mobile technician", gs: "Gas Safe accredited" };
+  var LISTED = { marquis: "Marquis", elddis: "Elddis", aws: "Approved Workshop Scheme" };
+  var pcInput = $("pc"), nearSt = $("near-status");
+  var here = null, byDist = [];
+  try { here = JSON.parse(localStorage.getItem("majestic-near") || "null"); } catch (e) { here = null; }
+
+  function miles(la1, lo1, la2, lo2) {
+    var r = Math.PI / 180, dLa = (la2 - la1) * r, dLo = (lo2 - lo1) * r;
+    var h = Math.sin(dLa / 2) * Math.sin(dLa / 2) + Math.cos(la1 * r) * Math.cos(la2 * r) * Math.sin(dLo / 2) * Math.sin(dLo / 2);
+    return 3958.8 * 2 * Math.asin(Math.sqrt(h));
+  }
+  function sortPlaces() {
+    byDist = [];
+    if (!here) return;
+    PL.places.forEach(function (p) { p.d = miles(here.la, here.lo, p.la, p.lo); });
+    byDist = PL.places.slice().sort(function (a, b) { return a.d - b.d; });
+  }
+  function setHere(h) {
+    here = h;
+    try { if (h) localStorage.setItem("majestic-near", JSON.stringify(h)); else localStorage.removeItem("majestic-near"); } catch (e) {}
+    sortPlaces();
+    nearStatus();
+    fillNear();
+  }
+  function nearStatus(msg, bad) {
+    nearSt.className = "help" + (bad ? " bad" : "");
+    if (msg) { nearSt.textContent = msg; return; }
+    nearSt.innerHTML = here
+      ? "Listing places near <strong>" + esc(here.label) + "</strong> under each part. <button type=\"button\" class=\"linkbtn\" id=\"near-clear\">Clear</button>"
+      : "Your postcode is sent only to postcodes.io, a free UK postcode lookup, to find its position, and is remembered in this browser only.";
+    var c = $("near-clear");
+    if (c) c.addEventListener("click", function () { pcInput.value = ""; setHere(null); });
+  }
+
+  var FULL = /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/, OUTW = /^[A-Z]{1,2}\d[A-Z\d]?$/;
+  function lookup(q) {
+    var s = String(q || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!FULL.test(s) && !OUTW.test(s)) return Promise.reject(new Error("Enter a UK postcode such as LS15 4NG, or just its first part, such as LS15."));
+    var req = FULL.test(s)
+      ? fetch("https://api.postcodes.io/postcodes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ postcodes: [s] }) })
+        .then(function (r) { return r.json(); }).then(function (j) { return j.result && j.result[0] && j.result[0].result; })
+      : fetch("https://api.postcodes.io/outcodes/" + s).then(function (r) { return r.json(); }).then(function (j) { return j.result; });
+    return req.then(function (res) {
+      if (!res || res.latitude == null) throw new Error("postcodes.io does not know " + q.trim().toUpperCase() + ". Check it, or enter just the first part.");
+      var dist = Array.isArray(res.admin_district) ? res.admin_district[0] : res.admin_district;
+      return { label: (res.postcode || res.outcode) + (dist ? " (" + dist + ")" : ""), q: q.trim().toUpperCase(), la: res.latitude, lo: res.longitude };
+    }, function () { throw new Error("Could not reach postcodes.io to look up the postcode. Try again, or use your location."); });
+  }
+  $("near-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var q = pcInput.value;
+    if (!q.trim()) { setHere(null); return; }
+    nearStatus("Looking up " + q.trim().toUpperCase() + " …");
+    lookup(q).then(setHere, function (err) { nearStatus(err.message, true); });
+  });
+  $("geo").addEventListener("click", function () {
+    if (!navigator.geolocation) { nearStatus("This browser cannot share its location. Enter a postcode instead.", true); return; }
+    nearStatus("Asking the browser for your location …");
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      pcInput.value = "";
+      // about 1 km precision is plenty for "nearest"
+      setHere({ label: "your location", la: Math.round(pos.coords.latitude * 100) / 100, lo: Math.round(pos.coords.longitude * 100) / 100 });
+    }, function () { nearStatus("Location not shared. Enter a postcode instead.", true); }, { timeout: 15000, maximumAge: 600000 });
+  });
+
+  var LISTED_MAKERS = {};
+  PL.places.forEach(function (p) { (p.mk || []).forEach(function (m) { LISTED_MAKERS[m.m] = 1; }); });
+  function has(roles) {
+    return function (p) { return p.r.some(function (r) { return roles.indexOf(r) >= 0; }); };
+  }
+  function nearGroups(cat, makers) {
+    var g = [], mk = makers.map(norm).filter(Boolean);
+    var hit = function (a, b) { return a && b && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0); };
+    if (mk.length) {
+      var names = [], roles = [];
+      var agents = byDist.filter(function (p) {
+        return (p.mk || []).some(function (m) {
+          var ok = mk.some(function (x) { return hit(x, norm(m.m)); });
+          if (ok && names.indexOf(m.m) < 0) names.push(m.m);
+          if (ok && roles.indexOf(m.r) < 0) roles.push(m.r);
+          return ok;
+        });
+      });
+      var plural = roles.map(function (r) { return r.replace(/y$/, "ie") + "s"; });
+      var rl = plural.length > 1 ? plural.slice(0, -1).join(", ") + " and " + plural[plural.length - 1] : plural[0];
+      if (agents.length) g.push({ t: names.join(" or ") + ": " + rl, n: "From the maker's own UK list. Mobile engineers come to you; the distance is to their base.", list: agents });
+      // a maker that publishes no list (Whale): say so rather than leave the owner wondering
+      Object.keys(PL.src).forEach(function (k) {
+        var m = k.slice(3);
+        if (k.indexOf("mk:") === 0 && !LISTED_MAKERS[m] && mk.some(function (x) { return hit(x, norm(m)); }))
+          g.push({ t: m + " service agents", n: m + " does not publish a list of UK service agents. Ask the places below whether they work on " + m + " appliances.", list: [] });
+      });
+    }
+    if (!VEHICLE[cat]) {
+      var genuine = has(["mq", "ed", "es"]);
+      g.push({ t: "Genuine parts: Marquis branches and Elddis dealers", n: "Order the part here, quoting your VIN. Each also has a workshop.", list: byDist.filter(genuine) });
+      g.push({ t: "Approved workshops", n: "Approved Workshop Scheme members that work on motorhomes. Ask whether they supply and fit this part.",
+        list: byDist.filter(function (p) { return has(["wf", "wb"])(p) && !genuine(p); }) });
+      g.push({ t: "Mobile technicians (they come to you)", n: "Approved Workshop Scheme mobile technicians. The distance is to the base they list.", list: byDist.filter(has(["wm"])) });
+    }
+    return g;
+  }
+  function placeHtml(p) {
+    var tags = p.r.map(function (r) { return ROLE[r]; }).filter(Boolean);
+    (p.mk || []).forEach(function (m) { tags.push(m.m + " " + m.r); });
+    var mob = p.r.indexOf("wm") >= 0 || (p.mk || []).some(function (m) { return m.mob; });
+    var dm = Math.round(p.d);
+    var d = p.d < 0.95 ? "under 1 mile" : dm + (dm === 1 ? " mile" : " miles");
+    var h = '<li class="place"><div class="pl-top"><strong>' + esc(p.n) + '</strong><span class="dist">' + (mob ? "based " : "") + d + "</span></div>";
+    h += '<div class="pl-tags">' + tags.map(esc).join(" · ") + "</div>";
+    if (p.aka) h += '<div class="pl-aka">Also listed as ' + p.aka.map(esc).join(", ") + "</div>";
+    h += '<div class="pl-addr">' + esc([p.a, p.pc].filter(Boolean).join(", ")) + "</div>";
+    var links = [];
+    // some lists give two numbers in one field ("T 07967 679793 / 01924 298109"): one link per complete UK number
+    var tels = {}, re = /(^|[^\d+])((?:\+44[\s-]?(?:\(0\)\s?)?0?|0)(?:\d[\s-]?){8,9}\d)/g, mt;
+    while ((mt = re.exec(p.ph || ""))) {
+      var n = mt[2].trim(), uk = n.replace(/\(0\)/, "").replace(/\D/g, "").replace(/^44/, "0").replace(/^00/, "0");
+      if ((uk.length === 10 || uk.length === 11) && !tels[uk]) { tels[uk] = 1; links.push('<a href="tel:' + uk + '">' + esc(n) + "</a>"); }
+    }
+    if (p.ph && !links.length) links.push(esc(p.ph));  // printed as the list gives it when it holds no complete UK number
+    if (p.w) links.push(link(p.w, "Website"));
+    links.push(link("https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(p.n + ", " + (p.pc || p.a)), "Map"));
+    var listed = [], seen = {};
+    var add = function (u, t) { if (u && !seen[u]) { seen[u] = 1; listed.push(link(u, t)); } };
+    Object.keys(p.l).forEach(function (k) { if (k !== "makers") add(p.l[k] === 1 ? PL.src[k].u : p.l[k], LISTED[k] || k); });
+    (p.mk || []).forEach(function (m) { add((PL.src["mk:" + m.m] || {}).u, m.m); });
+    h += '<div class="pl-links">' + links.join(" · ") + '</div><div class="pl-src">Listed by ' + listed.join(", ") + "</div></li>";
+    return h;
+  }
+  function fillNear() {
+    results.querySelectorAll(".near[data-cat]").forEach(function (el) {
+      var cat = el.dataset.cat, makers = el.dataset.mk ? el.dataset.mk.split("|") : [];
+      if (VEHICLE[cat]) {
+        el.innerHTML = "<h4>Near you</h4><p class=\"near-ask\">Base vehicle parts come from Peugeot dealers: " + link(PL.peugeot.u, PL.peugeot.t) + ".</p>";
+        return;
+      }
+      if (!here) {
+        el.innerHTML = '<h4>Near you</h4><p class="near-ask">Add your postcode to list the nearest dealers, workshops' + (makers.length ? " and service agents" : "") +
+          ' for this part. <button type="button" class="linkbtn" data-near-focus>Add postcode</button></p>';
+        return;
+      }
+      var h = "<h4>Near " + esc(here.label) + "</h4>";
+      nearGroups(cat, makers).forEach(function (g) {
+        if (!g.list.length) {
+          if (g.n) h += '<div class="near-group"><div class="ng-t">' + esc(g.t) + '</div><div class="ng-n">' + esc(g.n) + "</div></div>";
+          return;
+        }
+        h += '<div class="near-group"><div class="ng-t">' + esc(g.t) + '</div><div class="ng-n">' + esc(g.n) + '</div><ul class="places">' + g.list.slice(0, 3).map(placeHtml).join("") + "</ul>";
+        if (g.list.length > 3) {
+          h += '<ul class="places more-list" hidden>' + g.list.slice(3, 10).map(placeHtml).join("") + "</ul>" +
+            '<button type="button" class="linkbtn" data-more>Show ' + Math.min(7, g.list.length - 3) + " more</button>";
+        }
+        h += "</div>";
+      });
+      el.innerHTML = h;
+    });
+  }
+  results.addEventListener("click", function (e) {
+    var t = e.target.closest("[data-near-focus],[data-more]");
+    if (!t) return;
+    if (t.hasAttribute("data-more")) {
+      t.previousElementSibling.hidden = false;
+      t.parentNode.removeChild(t);
+      return;
+    }
+    pcInput.scrollIntoView({ behavior: "smooth", block: "center" });
+    pcInput.focus({ preventScroll: true });
+  });
+
+  // ---- what needs replacing? ----
+  var partQ = $("part-q"), partChips = $("part-chips");
+  var WORDS = {}, PROD = {}, ORDER = {};
+  Object.keys(D.catInfo).forEach(function (c) {
+    WORDS[c] = (D.catInfo[c].label + " " + (D.partWords[c] || "")).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  });
+  // maker and product names from the sources find their part too (Heki, Combi, Aquasource …)
+  D.facts.forEach(function (f) { if (f.nm) PROD[f.c] = (PROD[f.c] || "") + " " + [f.mk, f.pr, f.pn].filter(Boolean).join(" ").toLowerCase(); });
+  D.common.forEach(function (x, i) { ORDER[x.c] = i; });
+  function partMatches(q) {
+    var qs = q.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    if (!qs.length) return [];
+    var out = [];
+    Object.keys(D.catInfo).forEach(function (c) {
+      var lab = D.catInfo[c].label.toLowerCase().split(/[^a-z0-9]+/), score = 0, hits = 0;
+      qs.forEach(function (w) {
+        var pre = function (x) { return x.indexOf(w) === 0; };
+        var sc = lab.some(pre) ? 3 : WORDS[c].some(pre) ? 2 : w.length > 2 && (PROD[c] || "").indexOf(w) >= 0 ? 1 : 0;
+        if (sc) { score += sc; hits++; }
+      });
+      if (hits) out.push({ c: c, h: hits, s: score });
+    });
+    out.sort(function (a, b) {
+      return (b.h - a.h) || (b.s - a.s) || ((ORDER[a.c] != null ? ORDER[a.c] : 99) - (ORDER[b.c] != null ? ORDER[b.c] : 99));
+    });
+    return out.map(function (x) { return x.c; });
+  }
+  function chipHtml(c, text) {
+    return '<button type="button" class="chip part" data-part="' + esc(c) + '" aria-pressed="' + (curPart === c) + '">' + esc(text || D.catInfo[c].label) + "</button>";
+  }
+  function showChips(all) {
+    var q = partQ.value.trim(), h;
+    if (all) {
+      h = D.groups.map(function (g) { return g.cats.map(function (c) { return chipHtml(c); }).join(""); }).join("");
+    } else if (q) {
+      var m = partMatches(q);
+      h = m.length ? m.slice(0, 8).map(function (c) { return chipHtml(c); }).join("")
+        : '<p class="help">No part matches “' + esc(q) + '”. Try another word, or <button type="button" class="linkbtn" data-all-parts>show every part</button>.</p>';
+    } else {
+      h = D.common.map(function (x) { return chipHtml(x.c, x.t); }).join("") + '<button type="button" class="chip ghost" data-all-parts>Every part …</button>';
+    }
+    partChips.innerHTML = h;
+  }
+  function pickPart(c) {
+    var m = modelInput.value.trim(), s = seasonSel.value;
+    curPart = c;
+    if (m && s && byModel[m] && byModel[m][s]) location.hash = m + "/" + s + "/" + c;
+    else location.hash = "part/" + c;
+  }
+  partChips.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-part],[data-all-parts]");
+    if (!b) return;
+    if (b.hasAttribute("data-all-parts")) { partQ.value = ""; showChips(true); return; }
+    pickPart(b.dataset.part);
+  });
+  partQ.addEventListener("input", function () { showChips(); });
+  partQ.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    var m = partMatches(partQ.value);
+    if (m.length) pickPart(m[0]);
+  });
 
   // ---- static sections ----
   $("about-cards").innerHTML = D.about.map(function (c) { return '<div class="card"><h3>' + esc(c.title) + "</h3>" + c.html + "</div>"; }).join("");
@@ -367,5 +681,8 @@
   $("checked-line").textContent = "Facts and links checked " + D.checked + ".";
 
   fillSeasons("");
+  if (here) { pcInput.value = here.q || ""; sortPlaces(); }
+  nearStatus();
+  showChips();
   fromHash();
 })();

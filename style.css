@@ -18,6 +18,7 @@
   --own: #8a5a12;
   --own-soft: #f8ecd8;
   --gap: #8a8f95;
+  --bad: #b3261e;
   --radius: 12px;
   --shadow: 0 1px 2px rgba(20, 25, 30, .06), 0 4px 14px rgba(20, 25, 30, .05);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -44,16 +45,18 @@
     --own: #e7b867;
     --own-soft: #33281a;
     --gap: #8f99a3;
+    --bad: #ff8a80;
     --shadow: none;
   }
 }
 :root[data-theme="dark"] {
   --bg: #14181c; --surface: #1c2227; --surface-2: #232a30; --ink: #e8ecef; --ink-2: #b6bfc7; --ink-3: #8f99a3;
   --line: #333c44; --accent: #6fb0e0; --accent-ink: #0d1b26; --accent-soft: #1c3142; --warn-soft: #2e2716; --warn-line: #6b5726;
-  --maj: #7fd1ad; --maj-soft: #18322a; --eld: #c3a8ec; --eld-soft: #2a2238; --own: #e7b867; --own-soft: #33281a; --gap: #8f99a3; --shadow: none;
+  --maj: #7fd1ad; --maj-soft: #18322a; --eld: #c3a8ec; --eld-soft: #2a2238; --own: #e7b867; --own-soft: #33281a; --gap: #8f99a3; --bad: #ff8a80; --shadow: none;
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -130,6 +133,22 @@ h3 { font-size: 17px; margin: 0 0 6px; }
 }
 .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
+.partsfind {
+  margin: 14px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px; box-shadow: var(--shadow);
+}
+.partsfind h2 { margin-bottom: 10px; }
+.pf-grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 720px) { .pf-grid { grid-template-columns: 1fr 1fr; } }
+.inline { display: flex; gap: 8px; }
+.inline input { flex: 1; min-width: 0; }
+.go-sm { padding: 10px 16px; font-size: 16px; }
+.help.bad { color: var(--bad); font-weight: 600; }
+.linkbtn { font: inherit; background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.part-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.part-chips .help { margin: 0; }
+.chip.ghost { border-style: dashed; color: var(--ink-2); }
+
 #results { margin-top: 18px; }
 .empty { color: var(--ink-2); padding: 8px 0; }
 .result-head {
@@ -198,6 +217,26 @@ details.cat[open] > summary .chev { transform: rotate(90deg); }
 .route .links { display: block; margin-top: 2px; overflow-wrap: anywhere; }
 .route .rn { color: var(--ink-2); display: block; margin-top: 2px; }
 
+.k-line { font-size: 12.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); font-weight: 700; margin-top: 10px; }
+.focus-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; }
+.focus-head h3 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); margin-bottom: 8px; }
+details.cat.focus { border-color: var(--accent); border-width: 2px; }
+
+.near-ask { font-size: 14.5px; color: var(--ink-2); margin: 0; }
+.near-group { margin: 6px 0 14px; }
+.ng-t { font-weight: 700; }
+.ng-n { font-size: 13.5px; color: var(--ink-2); margin-bottom: 6px; }
+.places { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 6px; }
+.place { padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; background: var(--surface); }
+.pl-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.dist { white-space: nowrap; font-weight: 700; color: var(--accent); font-size: 14px; }
+.pl-tags { font-size: 12.5px; color: var(--ink-3); font-weight: 600; }
+.pl-addr { color: var(--ink-2); }
+.pl-aka { font-size: 13px; color: var(--ink-3); }
+.pl-links { margin-top: 2px; overflow-wrap: anywhere; }
+.pl-links a { font-weight: 600; }
+.pl-src { font-size: 12.5px; color: var(--ink-3); }
+
 .about { margin: 34px 0 10px; }
 .cards { display: grid; grid-template-columns: 1fr; gap: 10px; }
 @media (min-width: 720px) { .cards { grid-template-columns: 1fr 1fr; } }
@@ -213,7 +252,7 @@ details.cat[open] > summary .chev { transform: rotate(90deg); }
 .site-foot { margin-top: 30px; padding: 18px 0 30px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 13.5px; }
 
 @media print {
-  .finder, .quick, .notice, .toolbar, .about, .site-foot, .copy { display: none !important; }
+  .finder, .quick, .partsfind, .notice, .toolbar, .about, .site-foot, .copy, .near-ask, [data-more] { display: none !important; }
   body { background: #fff; color: #000; }
   details.cat { box-shadow: none; break-inside: avoid; }
   details.cat > .cat-body { display: block; }
